@@ -17,9 +17,11 @@ let state = {
   currentLine: null
 };
 
+var narration = { active: false, index: 0, timer: null };
+
 function loadProgress() {
   try {
-    const raw = localStorage.getItem(STORAGE_KEY);
+    var raw = localStorage.getItem(STORAGE_KEY);
     if (raw) state.progress = JSON.parse(raw);
   } catch (_) {}
   SECTIONS.forEach(function(s) {
@@ -55,6 +57,7 @@ function toggleSimpleMode() {
 }
 
 function navigate(page) {
+  stopNarration();
   state.page = page;
   document.querySelectorAll('.nav-links a').forEach(function(a) {
     a.classList.toggle('active', a.dataset.page === page);
@@ -84,6 +87,66 @@ function speakCurrent() {
   if (el) speak(el.textContent.slice(0, 400));
 }
 
+function stopNarration() {
+  narration.active = false;
+  if (narration.timer) { clearTimeout(narration.timer); narration.timer = null; }
+  if (window.speechSynthesis) window.speechSynthesis.cancel();
+  document.querySelectorAll('.poem-line.reading').forEach(function(el) {
+    el.classList.remove('reading');
+  });
+  var btn = document.getElementById('narrateBtn');
+  if (btn) { btn.textContent = '🔊 Read Poem Continuously'; btn.classList.remove('active'); }
+}
+
+function startNarration() {
+  if (narration.active) { stopNarration(); return; }
+  if (!window.speechSynthesis) { alert('Speech not supported on this device.'); return; }
+  narration.active = true;
+  narration.index = 0;
+  if (state.page !== 'poem') {
+    state.page = 'poem';
+    document.querySelectorAll('.nav-links a').forEach(function(a) {
+      a.classList.toggle('active', a.dataset.page === 'poem');
+    });
+    render();
+  }
+  var btn = document.getElementById('narrateBtn');
+  if (btn) { btn.textContent = '⏹ Stop Reading'; btn.classList.add('active'); }
+  speakLineByLine();
+}
+
+function speakLineByLine() {
+  if (!narration.active) return;
+  if (narration.index >= POEM.lines.length) {
+    stopNarration();
+    return;
+  }
+  var line = POEM.lines[narration.index];
+  document.querySelectorAll('.poem-line.reading').forEach(function(el) {
+    el.classList.remove('reading');
+  });
+  var el = document.querySelector('.poem-line[data-line="' + line.id + '"]');
+  if (el) {
+    el.classList.add('reading');
+    el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  }
+  window.speechSynthesis.cancel();
+  var u = new SpeechSynthesisUtterance(line.text);
+  u.lang = 'en-GB';
+  u.rate = 0.85;
+  u.onend = function() {
+    if (!narration.active) return;
+    narration.index++;
+    narration.timer = setTimeout(speakLineByLine, 350);
+  };
+  u.onerror = function() {
+    if (!narration.active) return;
+    narration.index++;
+    narration.timer = setTimeout(speakLineByLine, 200);
+  };
+  window.speechSynthesis.speak(u);
+}
+
 function closeModal(id) { document.getElementById(id).hidden = true; }
 function openSearch() {
   document.getElementById('searchModal').hidden = false;
@@ -110,8 +173,7 @@ function showWord(word) {
     '<p><strong>Context:</strong> ' + v.ctx + '</p>' +
     '<div style="display:flex;gap:8px;margin-top:12px">' +
     '<button class="btn sm" onclick="speak(\'' + v.word.replace(/'/g, "\\'") + '\')">🔊 Listen</button>' +
-    '<button class="btn sm" onclick="addFavWord(\'' + v.word.replace(/'/g, "\\'") + '\')">⭐ Favourite</button>' +
-    '</div>';
+    '<button class="btn sm" onclick="addFavWord(\'' + v.word.replace(/'/g, "\\'") + '\')">⭐ Favourite</button></div>';
   document.getElementById('wordModal').hidden = false;
   markSection('vocab', 50);
 }
@@ -295,8 +357,9 @@ function renderHome() {
     '<div class="hero-btns">' +
     '<button class="btn primary" onclick="navigate(\'poem\')">START LEARNING</button>' +
     '<button class="btn" onclick="navigate(\'poem\')">READ POEM</button>' +
+    '<button class="btn" onclick="startNarration()">🔊 LISTEN</button>' +
+    '<button class="btn" onclick="navigate(\'prosody\')">RHETORIC</button>' +
     '<button class="btn" onclick="navigate(\'teach\')">🧒 TEACH ME</button>' +
-    '<button class="btn" onclick="navigate(\'revision\')">REVISION</button>' +
     '<button class="btn" onclick="navigate(\'quiz\')">QUIZ</button></div>' +
     '<p class="hero-progress">Progress: <strong>' + pct + '%</strong></p></div>' +
     '<div class="card"><h3>From warming poles to beach-band dignity</h3>' +
@@ -307,9 +370,10 @@ function renderHome() {
     '<button class="btn sm" onclick="navigate(\'about\')">📜 About</button>' +
     '<button class="btn sm" onclick="navigate(\'vocab\')">🔤 Vocab</button>' +
     '<button class="btn sm" onclick="navigate(\'analysis\')">🔍 Analysis</button>' +
+    '<button class="btn sm" onclick="navigate(\'prosody\')">🎭 Rhetoric</button>' +
+    '<button class="btn sm" onclick="navigate(\'critical\')">🧠 Critical</button>' +
     '<button class="btn sm" onclick="navigate(\'themes\')">💡 Themes</button>' +
     '<button class="btn sm" onclick="navigate(\'exam\')">📝 Exam</button>' +
-    '<button class="btn sm" onclick="navigate(\'teach\')">🧒 Teach Me</button>' +
     '<button class="btn sm" onclick="navigate(\'progress\')">⭐ Progress</button></div></div>';
 }
 
@@ -358,14 +422,19 @@ function renderAbout() {
 function renderPoem() {
   markSection('poem', 50);
   var html = '<h1 class="section-title">The Greenhouse Effect</h1>' +
-    '<p class="section-desc">Tap a line for analysis · Tap words for dictionary</p><div class="card poem-block">';
+    '<p class="section-desc">Tap a line for analysis · Use continuous reading for full delivery</p>' +
+    '<div style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:12px">' +
+    '<button class="btn primary" id="narrateBtn" onclick="startNarration()">🔊 Read Poem Continuously</button>' +
+    '<button class="btn sm" onclick="stopNarration()">⏹ Stop</button>' +
+    '<button class="btn sm" onclick="navigate(\'prosody\')">Rhetoric & Prosody</button></div>' +
+    '<div class="card poem-block">';
   var last = 0;
   POEM.lines.forEach(function(l) {
     if (l.stanza && l.stanza !== last) {
       last = l.stanza;
       html += '<div class="quatrain-label">Part ' + last + '</div>';
     }
-    html += '<div class="poem-line" onclick="openLine(' + l.id + ')"><span class="line-num">' + l.id +
+    html += '<div class="poem-line" data-line="' + l.id + '" onclick="openLine(' + l.id + ')"><span class="line-num">' + l.id +
       '</span>' + makeWordsClickable(l.text) + '</div>';
   });
   return html + '</div>';
@@ -442,22 +511,64 @@ function renderBackground() {
   markSection('background', 70);
   return '<h1 class="section-title">Context</h1>' +
     '<div class="card"><h3>Climate & Society</h3>' +
-    '<p class="en-only">Dennis writes in the context of growing climate science. The poem is a meditation on how gradual warming would rewrite maps, economies and daily life.</p>' +
-    '<p class="bn">ডেনিস জলবায়ু বিজ্ঞানের যুগে লেখেন। কবিতা বৈজ্ঞানিক প্রবন্ধ নয় — ধীর উষ্ণায়ন কীভাবে মানচিত্র ও দৈনন্দিন জীবন বদলাবে তার ধ্যান।</p></div>' +
+    '<p class="en-only">Dennis writes in the context of growing climate science. The poem meditates on how gradual warming would rewrite maps, economies and daily life.</p>' +
+    '<p class="bn">ডেনিস জলবায়ু বিজ্ঞানের যুগে লেখেন। ধীর উষ্ণায়ন কীভাবে মানচিত্র ও দৈনন্দিন জীবন বদলাবে তার ধ্যান।</p></div>' +
     '<div class="card"><h3>Rome & Carthage</h3>' +
-    '<p class="en-only">Rome’s fall and Carthage as rival power provide a classical frame for modern decline and the rise of new centres.</p>' +
-    '<p class="bn">রোমের পতন ও কার্থেজ আধুনিক অবক্ষয় ও নতুন কেন্দ্রের উত্থানের শাস্ত্রীয় কাঠামো দেয়।</p></div>';
+    '<p class="en-only">Rome’s fall and Carthage as rival power frame modern decline and the rise of new centres.</p>' +
+    '<p class="bn">রোমের পতন ও কার্থেজ আধুনিক অবক্ষয় ও নতুন কেন্দ্রের উত্থানের কাঠামো দেয়।</p></div>';
+}
+
+function renderProsody() {
+  markSection('prosody', 70);
+  if (typeof PROSODY === 'undefined') {
+    return '<h1 class="section-title">Rhetoric & Prosody</h1><p class="text-muted">Content loading… hard-refresh if needed.</p>';
+  }
+  var p = PROSODY;
+  var html = '<h1 class="section-title">Rhetoric & Prosody</h1>' +
+    '<p class="section-desc">Form, sound, rhetorical strategies</p>';
+  html += '<div class="card"><h3>' + p.form.title + ' · <span class="bn">' + p.form.bn + '</span></h3><ul style="padding-left:18px;color:var(--muted)">';
+  p.form.points.forEach(function(pt) {
+    html += '<li style="margin-bottom:8px"><span class="en-only">' + pt.en + '</span><span class="bn">' + pt.bn + '</span></li>';
+  });
+  html += '</ul></div>';
+  html += '<div class="card"><h3>' + p.sound.title + ' · <span class="bn">' + p.sound.bn + '</span></h3><ul style="padding-left:18px;color:var(--muted)">';
+  p.sound.points.forEach(function(pt) {
+    html += '<li style="margin-bottom:8px"><span class="en-only">' + pt.en + '</span><span class="bn">' + pt.bn + '</span></li>';
+  });
+  html += '</ul></div>';
+  html += '<div class="card"><h3>' + p.rhetoric.title + ' · <span class="bn">' + p.rhetoric.bn + '</span></h3>';
+  p.rhetoric.devices.forEach(function(d) {
+    html += '<div style="margin-bottom:14px;padding-bottom:12px;border-bottom:1px solid var(--border)">' +
+      '<h4 style="color:var(--accent2);margin-bottom:4px">' + d.name + ' <span class="bn" style="font-size:0.9rem;color:var(--accent)">(' + d.bn + ')</span></h4>' +
+      '<p class="en-only" style="font-size:0.95rem">' + d.en + '</p>' +
+      '<p class="text-muted" style="font-size:0.85rem;margin-top:4px"><strong>Example:</strong> ' + d.example + '</p></div>';
+  });
+  html += '</div>';
+  html += '<div class="card"><h3>Scansion note</h3>' +
+    '<p class="en-only">' + p.scansionNote.en + '</p><p class="bn">' + p.scansionNote.bn + '</p></div>';
+  html += '<div class="card" style="text-align:center">' +
+    '<button class="btn primary" id="narrateBtn" onclick="startNarration()">🔊 Read Poem Continuously</button> ' +
+    '<button class="btn" onclick="navigate(\'critical\')">Critical Analysis →</button></div>';
+  return html;
 }
 
 function renderCritical() {
-  markSection('critical', 70);
-  return '<h1 class="section-title">Critical Appreciation</h1>' +
-    '<div class="card"><h3>Introduction</h3>' +
-    '<p class="en-only">Carl Dennis’s The Greenhouse Effect imagines the long social consequences of continuing global warming. Its strength is understatement: catastrophe is delivered in calm, practical detail.</p>' +
-    '<p class="bn">কার্ল ডেনিসের কবিতা বৈশ্বিক উষ্ণায়নের দীর্ঘ সামাজিক পরিণতি কল্পনা করে। শক্তি হল সংযম।</p></div>' +
-    '<div class="card"><h3>5-Mark sample</h3>' +
-    '<p class="en-only">Dennis shows grain belts moving to the poles, plains becoming dust bowls, and polar regions rising as powers. Society grows poorer: no cars, farms instead of suburbs, citizens maintaining public buildings. Allusions to Rome frame the decline as civilisational. Yet the poem ends with quiet acceptance and local cultural preference.</p>' +
-    '<p class="bn">শস্য অঞ্চল মেরুর দিকে, ধূলিঝড়, মেরু মহাশক্তি; দারিদ্র্য; রোমের তুলনা; তবু নীরব গ্রহণ ও স্থানীয় সংস্কৃতি।</p></div>';
+  markSection('critical', 80);
+  if (typeof CRITICAL_FULL === 'undefined') {
+    return '<h1 class="section-title">Critical Analysis</h1><div class="card"><p class="en-only">Carl Dennis’s poem maps climate consequences with understatement and ends in quiet acceptance.</p></div>';
+  }
+  var c = CRITICAL_FULL;
+  return '<h1 class="section-title">Critical Analysis</h1>' +
+    '<p class="section-desc">Full critical appreciation for exam answers</p>' +
+    '<div class="card"><h3>Introduction</h3><p class="en-only">' + c.intro.en + '</p><p class="bn">' + c.intro.bn + '</p></div>' +
+    '<div class="card"><h3>Structure</h3><p class="en-only">' + c.structure.en + '</p><p class="bn">' + c.structure.bn + '</p></div>' +
+    '<div class="card"><h3>Style & Tone</h3><p class="en-only">' + c.style.en + '</p><p class="bn">' + c.style.bn + '</p></div>' +
+    '<div class="card"><h3>Themes (critical view)</h3><p class="en-only">' + c.themesCritical.en + '</p><p class="bn">' + c.themesCritical.bn + '</p></div>' +
+    '<div class="card"><h3>Evaluation</h3><p class="en-only">' + c.evaluation.en + '</p><p class="bn">' + c.evaluation.bn + '</p></div>' +
+    '<div class="card"><h3>Exam tips</h3><p class="en-only">' + c.examTips.en + '</p><p class="bn">' + c.examTips.bn + '</p></div>' +
+    '<div class="card" style="text-align:center">' +
+    '<button class="btn primary" onclick="navigate(\'prosody\')">Rhetoric & Prosody</button> ' +
+    '<button class="btn" onclick="navigate(\'exam\')">Exam Questions</button></div>';
 }
 
 function renderExam() {
@@ -499,14 +610,16 @@ function renderRevision() {
     '<li>Greenland & Antarctica as powers</li>' +
     '<li>Suburbs→farms; no cars; vegetables on lawns</li>' +
     '<li>Rome / Forum / Carthages</li>' +
-    '<li>Acceptance + local culture</li></ul></div>';
+    '<li>Acceptance + local culture</li>' +
+    '<li>Understatement & free verse prosody</li></ul></div>';
 }
 
 function renderProgress() {
   var sections = [
     { id: 'poem', label: 'Poem' }, { id: 'vocab', label: 'Vocab' },
-    { id: 'analysis', label: 'Analysis' }, { id: 'themes', label: 'Themes' },
-    { id: 'exam', label: 'Exam' }, { id: 'quiz', label: 'Quiz' }, { id: 'revision', label: 'Revision' }
+    { id: 'analysis', label: 'Analysis' }, { id: 'prosody', label: 'Rhetoric' },
+    { id: 'themes', label: 'Themes' }, { id: 'exam', label: 'Exam' },
+    { id: 'quiz', label: 'Quiz' }, { id: 'revision', label: 'Revision' }
   ];
   var o = overallProgress();
   return '<h1 class="section-title">Progress</h1>' +
@@ -526,8 +639,8 @@ function render() {
     home: renderHome, poet: renderPoet, about: renderAbout, poem: renderPoem,
     vocab: renderVocab, bangla: renderBangla, analysis: renderAnalysis,
     devices: renderDevices, themes: renderThemes, background: renderBackground,
-    critical: renderCritical, exam: renderExam, quiz: renderQuiz,
-    revision: renderRevision, teach: renderTeach, progress: renderProgress
+    prosody: renderProsody, critical: renderCritical, exam: renderExam,
+    quiz: renderQuiz, revision: renderRevision, teach: renderTeach, progress: renderProgress
   };
   var fn = map[state.page] || renderHome;
   main.innerHTML = fn();
