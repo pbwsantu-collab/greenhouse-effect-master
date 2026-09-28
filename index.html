@@ -12,7 +12,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,500;0,600;0,700;1,500&family=Inter:wght@400;500;600;700&family=Noto+Sans+Bengali:wght@400;500;600;700&display=swap" rel="stylesheet" />
-  <link rel="stylesheet" href="styles.css?v=3" />
+  <link rel="stylesheet" href="styles.css?v=4" />
 </head>
 <body>
   <div id="app">
@@ -35,6 +35,7 @@
         <a data-page="devices">🎭 Devices</a>
         <a data-page="themes">💡 Themes</a>
         <a data-page="background">🏛 Context</a>
+        <a data-page="prosody">🎭 Rhetoric</a>
         <a data-page="critical">🧠 Critical</a>
         <a data-page="exam">📝 Exam Qs</a>
         <a data-page="quiz">❓ Quiz</a>
@@ -57,7 +58,7 @@
     <div class="fab-bar" id="fabBar">
       <button onclick="navigate('vocab')" title="Vocabulary">🔤</button>
       <button onclick="navigate('bangla')" title="বাংলা (India)">🇮🇳</button>
-      <button onclick="speakCurrent()" title="Audio">🔊</button>
+      <button onclick="startNarration()" title="Read poem continuously">🔊</button>
       <button onclick="openNotes()" title="Notes">📝</button>
       <button onclick="openSearch()" title="Search">🔍</button>
     </div>
@@ -67,17 +68,16 @@
     <div class="modal" id="notesModal" hidden><div class="modal-card"><button class="modal-close" onclick="closeModal('notesModal')">×</button><h3>My Notes</h3><textarea id="noteInput" rows="4" placeholder="Write a note…"></textarea><button class="btn primary" onclick="saveNote()">Save Note</button><div id="notesList"></div></div></div>
     <div class="offline-badge" id="offlineBadge" hidden>Offline mode</div>
   </div>
-  <script src="data.js?v=3"></script>
-  <script src="app.js?v=3"></script>
+  <script src="data.js?v=4"></script>
+  <script src="app.js?v=4"></script>
   <script>
     if ('serviceWorker' in navigator) {
       navigator.serviceWorker.getRegistrations().then(function(regs) {
         regs.forEach(function(r) { r.unregister(); });
       });
-      // Re-register after short delay with new cache
       window.addEventListener('load', function() {
         setTimeout(function() {
-          navigator.serviceWorker.register('sw.js?v=3').catch(function() {});
+          navigator.serviceWorker.register('sw.js?v=4').catch(function() {});
         }, 500);
       });
     }
