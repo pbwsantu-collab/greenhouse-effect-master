@@ -1,0 +1,13 @@
+{
+  "name": "The Greenhouse Effect Master",
+  "short_name": "Greenhouse Master",
+  "description": "Interactive bilingual study app for Carl Dennis's The Greenhouse Effect — Class XII Bengali Medium, West Bengal, India",
+  "start_url": "./index.html",
+  "display": "standalone",
+  "background_color": "#0a1628",
+  "theme_color": "#0f1f35",
+  "orientation": "portrait-primary",
+  "lang": "en",
+  "icons": [{"src": "favicon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any maskable"}],
+  "categories": ["education", "books"]
+}
